@@ -21,6 +21,12 @@ export default defineConfig({
     },
   },
 
+  resolve: {
+    alias: {
+      wefy: resolve(__dirname, "./src/"),
+    },
+  },
+
   test: {
     globals: true,
     environment: "happy-dom",
