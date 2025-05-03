@@ -1,0 +1,58 @@
+{
+  "name": "wefy",
+  "version": "0.0.0",
+  "type": "module",
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/esm/index.d.ts",
+  "description": "This is a fetch wrapper",
+  "author": {
+    "name": "Oluwatobiloba Promise Temitope",
+    "email": "oluwatobilobatemi05@gmail.com",
+    "url": "https://topsinoty.vercel.app"
+  },
+  "license": "MIT",
+  "readme": "./README.md",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/topsinoty-ee/wefy.git"
+  },
+  "bugs": {
+    "url": "git+https://github.com/topsinoty-ee/wefy/issues"
+  },
+  "keywords": [
+    "fetch",
+    "lightweight",
+    "weft"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/esm/index.d.ts",
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "test": "vitest",
+    "coverage": "vitest run --coverage",
+    "dry-pack": "npm pack --dry-run",
+    "patch": "pnpm version patch",
+    "minor": "pnpm version minor",
+    "major": "pnpm version major",
+    "prepublish": "npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.3",
+    "happy-dom": "^17.4.6",
+    "typescript": "~5.7.2",
+    "vite": "^6.3.1",
+    "vite-plugin-dts": "^4.5.3",
+    "vitest": "^3.1.2"
+  }
+}
