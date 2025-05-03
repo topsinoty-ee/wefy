@@ -1,9 +1,15 @@
-import { beforeAll, beforeEach, afterAll, afterEach } from "vitest";
+import { beforeAll, beforeEach, afterAll, afterEach, vi } from "vitest";
 
-beforeAll(() => {});
+beforeAll(() => {
+  global.fetch = vi.fn() as typeof fetch;
+});
 
-beforeEach(() => {});
-
-afterAll(() => {});
+beforeEach(() => {
+  vi.clearAllMocks();
+});
 
 afterEach(() => {});
+
+afterAll(() => {
+  vi.restoreAllMocks();
+});
