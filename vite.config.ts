@@ -29,6 +29,7 @@ export default defineConfig({
       "src/**/*.{test,spec}.{ts,tsx}",
       "tests/**/*.{test,spec}.{ts,tsx}",
     ],
+    exclude: ["*.config.*", "*.d.ts"],
     coverage: {
       provider: "v8",
     },
