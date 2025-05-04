@@ -1,7 +1,10 @@
 import { beforeAll, beforeEach, afterAll, afterEach, vi } from "vitest";
 
 beforeAll(() => {
-  global.fetch = vi.fn() as typeof fetch;
+  global.fetch = vi.fn().mockResolvedValue({
+    json: vi.fn().mockResolvedValue({ success: true }),
+    status: 200,
+  });
 });
 
 beforeEach(() => {
