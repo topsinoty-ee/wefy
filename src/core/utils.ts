@@ -1,7 +1,4 @@
-export type Params = Record<
-  string,
-  string | number | boolean | undefined | (string | number | boolean)[]
->;
+import { Params } from "./types";
 
 export function sanitizeUrl(
   baseUrl: string,
