@@ -2,12 +2,19 @@ import { WefyError } from "./error";
 import { Params, HttpMethod } from "./types";
 import { sanitizeUrl } from "./utils";
 
+/**
+ * Configuration interface for Wefy HTTP client
+ */
 export interface WefyConfig {
   baseUrl: string;
   options?: Omit<RequestInit, "method" | "body">;
 }
 
-interface WefyRequestConfig<
+/**
+ * Request configuration interface
+ * @template Body - Type of the request body
+ */
+export interface WefyRequestConfig<
   Body extends BodyInit | object | null | undefined = undefined
 > {
   params?: Params;
@@ -15,11 +22,17 @@ interface WefyRequestConfig<
   body?: Body;
 }
 
-export interface HttpClient {
+/**
+ * Interface defining HTTP client methods
+ */
+export interface HttpClientVerbs {
+  /** @inheritdoc */
   get<Response = unknown>(
     endpoint: string,
     config?: Omit<WefyRequestConfig, "body">
   ): Promise<Response>;
+
+  /** @inheritdoc */
   post<
     Response = unknown,
     Body extends BodyInit | object | null | undefined = undefined
@@ -27,6 +40,8 @@ export interface HttpClient {
     endpoint: string,
     config?: WefyRequestConfig<Body>
   ): Promise<Response>;
+
+  /** @inheritdoc */
   put<
     Response = unknown,
     Body extends BodyInit | object | null | undefined = undefined
@@ -34,6 +49,8 @@ export interface HttpClient {
     endpoint: string,
     config?: WefyRequestConfig<Body>
   ): Promise<Response>;
+
+  /** @inheritdoc */
   patch<
     Response = unknown,
     Body extends BodyInit | object | null | undefined = undefined
@@ -41,6 +58,8 @@ export interface HttpClient {
     endpoint: string,
     config?: WefyRequestConfig<Body>
   ): Promise<Response>;
+
+  /** @inheritdoc */
   delete<
     Response = unknown,
     Body extends BodyInit | object | null | undefined = undefined
@@ -48,21 +67,45 @@ export interface HttpClient {
     endpoint: string,
     config?: WefyRequestConfig<Body>
   ): Promise<Response>;
+
+  /** @inheritdoc */
   head<Response = unknown>(
     endpoint: string,
     config?: Omit<WefyRequestConfig, "body">
   ): Promise<Response>;
+
+  /** @inheritdoc */
   options<Response = unknown>(
     endpoint: string,
     config?: Omit<WefyRequestConfig, "body">
   ): Promise<Response>;
 }
-
-export class Wefy implements HttpClient {
+/**
+ * @todo timeout
+ * @todo abortsignal
+ * @todo registry
+ * @todo immutability
+ * @todo extensions
+ * @todo proper docs
+ *
+ *
+ * @class Wefy
+ * @description A configurable HTTP client with a fluent interface for making web requests
+ */
+export class Wefy implements HttpClientVerbs {
   private constructor(private readonly config: WefyConfig) {
     this.validateConfig(config);
   }
 
+  /**
+   * Creates a new Wefy instance with the given configuration
+   * @param config - Configuration object or base URL string
+   * @returns A new Wefy instance
+   * @throws { WefyError } If the base URL is invalid or missing
+   * @example
+   * const client = Wefy.create('https://api.example.com');
+   * const client = Wefy.create({ baseUrl: 'https://api.example.com' });
+   */
   static create(config: WefyConfig): Wefy;
   static create(baseUrl: string): Wefy;
   static create(config: WefyConfig | string): Wefy {
@@ -78,6 +121,12 @@ export class Wefy implements HttpClient {
     }
   }
 
+  /**
+   * Sends a GET request to the specified endpoint
+   * @param endpoint - URL endpoint path
+   * @param config - Optional request configuration
+   * @returns Promise resolving to response data
+   */
   get<Response = unknown>(
     endpoint: string,
     config?: Omit<WefyRequestConfig, "body">
@@ -85,6 +134,12 @@ export class Wefy implements HttpClient {
     return this.request<Response, undefined>("GET", endpoint, config);
   }
 
+  /**
+   * Sends a POST request to the specified endpoint
+   * @param endpoint - URL endpoint path
+   * @param config - Optional request configuration including body
+   * @returns Promise resolving to response data
+   */
   post<
     Response = unknown,
     Body extends BodyInit | object | null | undefined = undefined
@@ -92,6 +147,12 @@ export class Wefy implements HttpClient {
     return this.request<Response, Body>("POST", endpoint, config);
   }
 
+  /**
+   * Sends a PUT request to the specified endpoint
+   * @param endpoint - URL endpoint path
+   * @param config - Optional request configuration including body
+   * @returns Promise resolving to response data
+   */
   put<
     Response = unknown,
     Body extends BodyInit | object | null | undefined = undefined
@@ -99,6 +160,12 @@ export class Wefy implements HttpClient {
     return this.request<Response, Body>("PUT", endpoint, config);
   }
 
+  /**
+   * Sends a PATCH request to the specified endpoint
+   * @param endpoint - URL endpoint path
+   * @param config - Optional request configuration including body
+   * @returns Promise resolving to response data
+   */
   patch<
     Response = unknown,
     Body extends BodyInit | object | null | undefined = undefined
@@ -106,6 +173,12 @@ export class Wefy implements HttpClient {
     return this.request<Response, Body>("PATCH", endpoint, config);
   }
 
+  /**
+   * Sends a DELETE request to the specified endpoint
+   * @param endpoint - URL endpoint path
+   * @param config - Optional request configuration including body
+   * @returns Promise resolving to response data
+   */
   delete<
     Response = unknown,
     Body extends BodyInit | object | null | undefined = undefined
@@ -113,6 +186,12 @@ export class Wefy implements HttpClient {
     return this.request<Response, Body>("DELETE", endpoint, config);
   }
 
+  /**
+   * Sends a HEAD request to the specified endpoint
+   * @param endpoint - URL endpoint path
+   * @param config - Optional request configuration
+   * @returns Promise resolving to response data
+   */
   head<Response = unknown>(
     endpoint: string,
     config?: Omit<WefyRequestConfig, "body">
@@ -120,6 +199,12 @@ export class Wefy implements HttpClient {
     return this.request<Response, undefined>("HEAD", endpoint, config);
   }
 
+  /**
+   * Sends an OPTIONS request to the specified endpoint
+   * @param endpoint - URL endpoint path
+   * @param config - Optional request configuration
+   * @returns Promise resolving to response data
+   */
   options<Response = unknown>(
     endpoint: string,
     config?: Omit<WefyRequestConfig, "body">
