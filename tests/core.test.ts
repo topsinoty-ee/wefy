@@ -104,10 +104,16 @@ describe("Core | Wefy", () => {
     it("handles endpoints with leading/trailing slashes", async () => {
       const client = Wefy.create(config);
       await client.get("test/");
+      expect(getFetchCall()[0]).toBe("https://api.example.com/test/");
+
+      await client.get("test");
+      expect(getFetchCall()[0]).toBe("https://api.example.com/test");
+
+      await client.get("/test");
       expect(getFetchCall()[0]).toBe("https://api.example.com/test");
 
       await client.get("/test/");
-      expect(getFetchCall()[1][0]).toBe("https://api.example.com/test");
+      expect(getFetchCall()[1][0]).toBe("https://api.example.com/test/");
     });
 
     it("handles query parameters", async () => {
@@ -121,6 +127,7 @@ describe("Core | Wefy", () => {
           zero: 0,
           false: false,
         },
+        encode: false,
       });
 
       const [url] = getFetchCall();

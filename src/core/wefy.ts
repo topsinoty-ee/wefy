@@ -1,13 +1,19 @@
 import { WefyError } from "./error";
 import { Params, HttpMethod } from "./types";
-import { sanitizeUrl } from "./utils";
+import {
+  createSignal,
+  resolveFetch,
+  sanitizeUrl,
+  SanitizeUrlOptions,
+} from "./utils";
 
 /**
  * Configuration interface for Wefy HTTP client
  */
-export interface WefyConfig {
+export interface WefyConfig extends SanitizeUrlOptions {
   baseUrl: string;
   options?: Omit<RequestInit, "method" | "body">;
+  timeout?: number;
 }
 
 /**
@@ -16,10 +22,11 @@ export interface WefyConfig {
  */
 export interface WefyRequestConfig<
   Body extends BodyInit | object | null | undefined = undefined
-> {
+> extends Partial<SanitizeUrlOptions> {
   params?: Params;
   options?: RequestInit;
   body?: Body;
+  timeout?: number;
 }
 
 /**
@@ -80,21 +87,17 @@ export interface HttpClientVerbs {
     config?: Omit<WefyRequestConfig, "body">
   ): Promise<Response>;
 }
+
 /**
- * @todo timeout
- * @todo abortsignal
- * @todo registry
- * @todo immutability
- * @todo extensions
- * @todo proper docs
- *
- *
  * @class Wefy
  * @description A configurable HTTP client with a fluent interface for making web requests
  */
 export class Wefy implements HttpClientVerbs {
   private constructor(private readonly config: WefyConfig) {
     this.validateConfig(config);
+    this.config.timeout = config.timeout ?? 5000;
+    this.config.encode = config.encode ?? true;
+    this.config.preserveEncoding = config.preserveEncoding ?? false;
   }
 
   /**
@@ -102,22 +105,24 @@ export class Wefy implements HttpClientVerbs {
    * @param config - Configuration object or base URL string
    * @returns A new Wefy instance
    * @throws { WefyError } If the base URL is invalid or missing
-   * @example
-   * const client = Wefy.create('https://api.example.com');
-   * const client = Wefy.create({ baseUrl: 'https://api.example.com' });
    */
   static create(config: WefyConfig): Wefy;
   static create(baseUrl: string): Wefy;
   static create(config: WefyConfig | string): Wefy {
+    resolveFetch();
     return new Wefy(typeof config === "string" ? { baseUrl: config } : config);
   }
 
   private validateConfig(config: WefyConfig): void {
     if (!config.baseUrl) throw new WefyError("Base URL is required");
     try {
-      new URL(config.baseUrl);
-    } catch {
-      throw new WefyError("Invalid base URL format");
+      const url = new URL(config.baseUrl);
+      if (!["http:", "https:"].includes(url.protocol)) {
+        throw new WefyError("Only http and https protocols are supported");
+      }
+    } catch (e) {
+      if (e instanceof WefyError) throw e;
+      throw new WefyError(`Invalid base URL format, ${e}`);
     }
   }
 
@@ -220,7 +225,30 @@ export class Wefy implements HttpClientVerbs {
     endpoint: string,
     config?: WefyRequestConfig<Body>
   ): Promise<Response> {
-    const url = sanitizeUrl(this.config.baseUrl, endpoint, config?.params);
+    const timeoutMs = config?.timeout ?? this.config.timeout;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(
+      () => controller.abort(`Request timed out after ${timeoutMs}ms`),
+      timeoutMs
+    );
+
+    const sanitizeOptions: SanitizeUrlOptions = {
+      encode: config?.encode ?? this.config.encode ?? true,
+      preserveEncoding:
+        config?.preserveEncoding ?? this.config.preserveEncoding ?? false,
+    };
+
+    const url = sanitizeUrl(
+      this.config.baseUrl,
+      endpoint,
+      config?.params,
+      sanitizeOptions
+    );
+
+    if (method === "GET" && this.cache.has(url.toString())) {
+      return this.cache.get(url.toString()) as Response;
+    }
+
     const headers = new Headers({
       ...this.config.options?.headers,
       ...config?.options?.headers,
@@ -263,26 +291,48 @@ export class Wefy implements HttpClientVerbs {
       const response = await fetch(url.toString(), {
         ...this.config.options,
         ...config?.options,
+        signal: createSignal(controller.signal, config?.options?.signal),
+        credentials:
+          config?.options?.credentials ??
+          this.config.options?.credentials ??
+          "same-origin",
         method,
         headers,
         body: processedBody,
       });
 
       if (!response.ok) {
-        const errorText = await this.parseError(response);
-        throw new WefyError(`Request failed: ${response.status} ${errorText}`);
+        const res = response.clone();
+
+        const errorText = await this.parseError(res);
+        throw new WefyError(`Request failed: ${res.status} ${errorText}`, {
+          status: res.status,
+          response: res,
+          error: errorText,
+        });
       }
 
-      return this.parseResponse<Response>(response);
+      if (method === "GET") {
+        this.cache.set(url.toString(), response);
+      }
+
+      return await this.parseResponse<Response>(response, method);
     } catch (error) {
       if (error instanceof WefyError) throw error;
       throw new WefyError(
         error instanceof Error ? error.message : "Unknown error occurred"
       );
+    } finally {
+      clearTimeout(timeoutId);
     }
   }
 
-  private async parseResponse<T>(response: globalThis.Response): Promise<T> {
+  private async parseResponse<T>(
+    response: globalThis.Response,
+    method: HttpMethod
+  ): Promise<T> {
+    if (method === "HEAD" || method === "OPTIONS") return undefined as T;
+
     const contentType = response.headers.get("content-type");
 
     if (contentType?.includes("application/json")) {
@@ -304,11 +354,13 @@ export class Wefy implements HttpClientVerbs {
       }
       return await response.text();
     } catch {
-      return response.statusText;
+      return response.statusText || response.status.toString();
     }
   }
 
   private canHaveBody(method: HttpMethod): boolean {
     return ["POST", "PUT", "PATCH", "DELETE"].includes(method);
   }
+
+  private cache = new Map<string, Response>();
 }
