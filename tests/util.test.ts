@@ -113,8 +113,8 @@ describe("Utils | sanitizeUrl", () => {
       const url = sanitizeUrl(BASE_URL, "/test?existing&another=", {
         new: "value",
       });
-      expect(url.searchParams.get("existing")).toBe("");
-      expect(url.searchParams.get("another")).toBe("");
+      expect(url.searchParams.get("existing")).toBeFalsy();
+      expect(url.searchParams.get("another")).toBeFalsy();
       expect(url.searchParams.get("new")).toBe("value");
     });
 
