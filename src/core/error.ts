@@ -1,5 +1,12 @@
+interface WefyErrorOptions {
+  error: unknown;
+  cause: unknown;
+  status: number;
+  response: Response;
+}
+
 export class WefyError extends Error {
-  constructor(message: string, options?: { cause?: unknown }) {
+  constructor(message: string, options?: Partial<WefyErrorOptions>) {
     super(message);
     this.name = "WefyError";
 
