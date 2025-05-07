@@ -92,28 +92,33 @@ export function sanitizeUrl(
   }
 }
 
-export function createSignal(...signals: AbortSignal[]): AbortSignal {
+export function createSignal(
+  ...signals: (AbortSignal | null | undefined)[]
+): AbortSignal {
   const controller = new AbortController();
 
-  if (signals.some((signal) => signal.aborted)) {
-    controller.abort();
-    return controller.signal;
-  }
+  const abort = () => controller.abort();
 
-  function abort() {
-    controller.abort();
-    cleanup();
-  }
+  for (const signal of signals) {
+    if (!signal) continue;
 
-  function cleanup() {
-    signals.forEach((signal) => {
-      signal.addEventListener("abort", abort);
-    });
-  }
+    if (signal.aborted) {
+      controller.abort();
+      return controller.signal;
+    }
 
-  signals.forEach((signal) => {
-    signal.addEventListener("abort", abort);
-  });
+    signal.addEventListener("abort", abort, { once: true });
+  }
 
   return controller.signal;
+}
+
+export function resolveFetch(): typeof fetch {
+  if (typeof globalThis.fetch === "function") {
+    return globalThis.fetch;
+  }
+
+  throw new Error(
+    "[Wefy] No global fetch available. Please use Node.js 18+ or provide a custom fetch implementation."
+  );
 }
