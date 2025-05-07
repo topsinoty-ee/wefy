@@ -8,7 +8,8 @@
     "types": ["node"],
     "baseUrl": "./",
     "paths": {
-      "wefy": ["./src/"]
+      "wefy": ["./src/"],
+      "@/*": ["./src/*"]
     },
 
     /* Bundler mode */

@@ -24,6 +24,7 @@ export default defineConfig({
   resolve: {
     alias: {
       wefy: resolve(__dirname, "./src/"),
+      "@/*": resolve(__dirname, "./src/*"),
     },
   },
 
