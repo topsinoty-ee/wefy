@@ -1,98 +1,77 @@
 import { WefyError } from "./error";
-import { Params, HttpMethod } from "./types";
 import {
-  createSignal,
-  resolveFetch,
-  sanitizeUrl,
+  HttpMethod,
+  WefyConfig,
+  WefyRequestConfig,
+  Params,
   SanitizeUrlOptions,
-} from "./utils";
+} from "./types";
+import { createSignal, resolveFetch, sanitizeUrl } from "./utils";
 
-/**
- * Configuration interface for Wefy HTTP client
- */
-export interface WefyConfig extends SanitizeUrlOptions {
-  baseUrl: string;
-  options?: Omit<RequestInit, "method" | "body">;
-  timeout?: number;
-}
+type HTTPClientResponse<ResponseData> = ResponseData;
+type HTTPRequestBody = BodyInit | Record<string, unknown> | null | undefined;
+type EmptyRequestBody = Record<string, never>;
 
-/**
- * Request configuration interface
- * @template Body - Type of the request body
- */
-export interface WefyRequestConfig<
-  Body extends BodyInit | object | null | undefined = undefined
-> extends Partial<SanitizeUrlOptions> {
-  params?: Params;
-  options?: RequestInit;
-  body?: Body;
-  timeout?: number;
-}
-
-/**
- * Interface defining HTTP client methods
- */
-export interface HttpClientVerbs {
-  /** @inheritdoc */
-  get<Response = unknown>(
+interface HTTPClientInterface {
+  get<ResponseData = unknown, RequestQuery extends Params = Params>(
     endpoint: string,
-    config?: Omit<WefyRequestConfig, "body">
-  ): Promise<Response>;
+    config?: Omit<WefyRequestConfig<EmptyRequestBody>, "body"> & {
+      params?: RequestQuery;
+    }
+  ): Promise<HTTPClientResponse<ResponseData>>;
 
-  /** @inheritdoc */
   post<
-    Response = unknown,
-    Body extends BodyInit | object | null | undefined = undefined
+    ResponseData = unknown,
+    RequestBody extends HTTPRequestBody = undefined,
+    RequestQuery extends Params = Params
   >(
     endpoint: string,
-    config?: WefyRequestConfig<Body>
-  ): Promise<Response>;
+    config?: WefyRequestConfig<RequestBody> & { params?: RequestQuery }
+  ): Promise<HTTPClientResponse<ResponseData>>;
 
-  /** @inheritdoc */
   put<
-    Response = unknown,
-    Body extends BodyInit | object | null | undefined = undefined
+    ResponseData = unknown,
+    RequestBody extends HTTPRequestBody = undefined,
+    RequestQuery extends Params = Params
   >(
     endpoint: string,
-    config?: WefyRequestConfig<Body>
-  ): Promise<Response>;
+    config?: WefyRequestConfig<RequestBody> & { params?: RequestQuery }
+  ): Promise<HTTPClientResponse<ResponseData>>;
 
-  /** @inheritdoc */
   patch<
-    Response = unknown,
-    Body extends BodyInit | object | null | undefined = undefined
+    ResponseData = unknown,
+    RequestBody extends HTTPRequestBody = undefined,
+    RequestQuery extends Params = Params
   >(
     endpoint: string,
-    config?: WefyRequestConfig<Body>
-  ): Promise<Response>;
+    config?: WefyRequestConfig<RequestBody> & { params?: RequestQuery }
+  ): Promise<HTTPClientResponse<ResponseData>>;
 
-  /** @inheritdoc */
   delete<
-    Response = unknown,
-    Body extends BodyInit | object | null | undefined = undefined
+    ResponseData = unknown,
+    RequestBody extends HTTPRequestBody = undefined,
+    RequestQuery extends Params = Params
   >(
     endpoint: string,
-    config?: WefyRequestConfig<Body>
-  ): Promise<Response>;
+    config?: WefyRequestConfig<RequestBody> & { params?: RequestQuery }
+  ): Promise<HTTPClientResponse<ResponseData>>;
 
-  /** @inheritdoc */
-  head<Response = unknown>(
+  head<ResponseData = unknown, RequestQuery extends Params = Params>(
     endpoint: string,
-    config?: Omit<WefyRequestConfig, "body">
-  ): Promise<Response>;
+    config?: Omit<WefyRequestConfig<EmptyRequestBody>, "body"> & {
+      params?: RequestQuery;
+    }
+  ): Promise<HTTPClientResponse<ResponseData>>;
 
-  /** @inheritdoc */
-  options<Response = unknown>(
+  options<ResponseData = unknown, RequestQuery extends Params = Params>(
     endpoint: string,
-    config?: Omit<WefyRequestConfig, "body">
-  ): Promise<Response>;
+    config?: Omit<WefyRequestConfig<EmptyRequestBody>, "body"> & {
+      params?: RequestQuery;
+    }
+  ): Promise<HTTPClientResponse<ResponseData>>;
 }
 
-/**
- * @class Wefy
- * @description A configurable HTTP client with a fluent interface for making web requests
- */
-export class Wefy implements HttpClientVerbs {
+export class Wefy implements HTTPClientInterface {
   private constructor(private readonly config: WefyConfig) {
     this.validateConfig(config);
     this.config.timeout = config.timeout ?? 5000;
@@ -100,12 +79,6 @@ export class Wefy implements HttpClientVerbs {
     this.config.preserveEncoding = config.preserveEncoding ?? false;
   }
 
-  /**
-   * Creates a new Wefy instance with the given configuration
-   * @param config - Configuration object or base URL string
-   * @returns A new Wefy instance
-   * @throws { WefyError } If the base URL is invalid or missing
-   */
   static create(config: WefyConfig): Wefy;
   static create(baseUrl: string): Wefy;
   static create(config: WefyConfig | string): Wefy {
@@ -120,111 +93,120 @@ export class Wefy implements HttpClientVerbs {
       if (!["http:", "https:"].includes(url.protocol)) {
         throw new WefyError("Only http and https protocols are supported");
       }
-    } catch (e) {
-      if (e instanceof WefyError) throw e;
-      throw new WefyError(`Invalid base URL format, ${e}`);
+    } catch (error) {
+      if (error instanceof WefyError) throw error;
+      throw new WefyError(`Invalid base URL format: ${error}`);
     }
   }
 
-  /**
-   * Sends a GET request to the specified endpoint
-   * @param endpoint - URL endpoint path
-   * @param config - Optional request configuration
-   * @returns Promise resolving to response data
-   */
-  get<Response = unknown>(
+  public get<ResponseData = unknown, RequestQuery extends Params = Params>(
     endpoint: string,
-    config?: Omit<WefyRequestConfig, "body">
-  ) {
-    return this.request<Response, undefined>("GET", endpoint, config);
+    config?: Omit<WefyRequestConfig<EmptyRequestBody>, "body"> & {
+      params?: RequestQuery;
+    }
+  ): Promise<HTTPClientResponse<ResponseData>> {
+    return this.makeRequest<ResponseData, EmptyRequestBody, RequestQuery>(
+      "GET",
+      endpoint,
+      config
+    );
   }
 
-  /**
-   * Sends a POST request to the specified endpoint
-   * @param endpoint - URL endpoint path
-   * @param config - Optional request configuration including body
-   * @returns Promise resolving to response data
-   */
-  post<
-    Response = unknown,
-    Body extends BodyInit | object | null | undefined = undefined
-  >(endpoint: string, config?: WefyRequestConfig<Body>) {
-    return this.request<Response, Body>("POST", endpoint, config);
-  }
-
-  /**
-   * Sends a PUT request to the specified endpoint
-   * @param endpoint - URL endpoint path
-   * @param config - Optional request configuration including body
-   * @returns Promise resolving to response data
-   */
-  put<
-    Response = unknown,
-    Body extends BodyInit | object | null | undefined = undefined
-  >(endpoint: string, config?: WefyRequestConfig<Body>) {
-    return this.request<Response, Body>("PUT", endpoint, config);
-  }
-
-  /**
-   * Sends a PATCH request to the specified endpoint
-   * @param endpoint - URL endpoint path
-   * @param config - Optional request configuration including body
-   * @returns Promise resolving to response data
-   */
-  patch<
-    Response = unknown,
-    Body extends BodyInit | object | null | undefined = undefined
-  >(endpoint: string, config?: WefyRequestConfig<Body>) {
-    return this.request<Response, Body>("PATCH", endpoint, config);
-  }
-
-  /**
-   * Sends a DELETE request to the specified endpoint
-   * @param endpoint - URL endpoint path
-   * @param config - Optional request configuration including body
-   * @returns Promise resolving to response data
-   */
-  delete<
-    Response = unknown,
-    Body extends BodyInit | object | null | undefined = undefined
-  >(endpoint: string, config?: WefyRequestConfig<Body>) {
-    return this.request<Response, Body>("DELETE", endpoint, config);
-  }
-
-  /**
-   * Sends a HEAD request to the specified endpoint
-   * @param endpoint - URL endpoint path
-   * @param config - Optional request configuration
-   * @returns Promise resolving to response data
-   */
-  head<Response = unknown>(
+  public post<
+    ResponseData = unknown,
+    RequestBody extends HTTPRequestBody = undefined,
+    RequestQuery extends Params = Params
+  >(
     endpoint: string,
-    config?: Omit<WefyRequestConfig, "body">
-  ) {
-    return this.request<Response, undefined>("HEAD", endpoint, config);
+    config?: WefyRequestConfig<RequestBody> & { params?: RequestQuery }
+  ): Promise<HTTPClientResponse<ResponseData>> {
+    return this.makeRequest<ResponseData, RequestBody, RequestQuery>(
+      "POST",
+      endpoint,
+      config
+    );
   }
 
-  /**
-   * Sends an OPTIONS request to the specified endpoint
-   * @param endpoint - URL endpoint path
-   * @param config - Optional request configuration
-   * @returns Promise resolving to response data
-   */
-  options<Response = unknown>(
+  public put<
+    ResponseData = unknown,
+    RequestBody extends HTTPRequestBody = undefined,
+    RequestQuery extends Params = Params
+  >(
     endpoint: string,
-    config?: Omit<WefyRequestConfig, "body">
-  ) {
-    return this.request<Response, undefined>("OPTIONS", endpoint, config);
+    config?: WefyRequestConfig<RequestBody> & { params?: RequestQuery }
+  ): Promise<HTTPClientResponse<ResponseData>> {
+    return this.makeRequest<ResponseData, RequestBody, RequestQuery>(
+      "PUT",
+      endpoint,
+      config
+    );
   }
 
-  private async request<
-    Response,
-    Body extends BodyInit | object | null | undefined = undefined
+  public patch<
+    ResponseData = unknown,
+    RequestBody extends HTTPRequestBody = undefined,
+    RequestQuery extends Params = Params
+  >(
+    endpoint: string,
+    config?: WefyRequestConfig<RequestBody> & { params?: RequestQuery }
+  ): Promise<HTTPClientResponse<ResponseData>> {
+    return this.makeRequest<ResponseData, RequestBody, RequestQuery>(
+      "PATCH",
+      endpoint,
+      config
+    );
+  }
+
+  public delete<
+    ResponseData = unknown,
+    RequestBody extends HTTPRequestBody = undefined,
+    RequestQuery extends Params = Params
+  >(
+    endpoint: string,
+    config?: WefyRequestConfig<RequestBody> & { params?: RequestQuery }
+  ): Promise<HTTPClientResponse<ResponseData>> {
+    return this.makeRequest<ResponseData, RequestBody, RequestQuery>(
+      "DELETE",
+      endpoint,
+      config
+    );
+  }
+
+  public head<ResponseData = unknown, RequestQuery extends Params = Params>(
+    endpoint: string,
+    config?: Omit<WefyRequestConfig<EmptyRequestBody>, "body"> & {
+      params?: RequestQuery;
+    }
+  ): Promise<HTTPClientResponse<ResponseData>> {
+    return this.makeRequest<ResponseData, EmptyRequestBody, RequestQuery>(
+      "HEAD",
+      endpoint,
+      config
+    );
+  }
+
+  public options<ResponseData = unknown, RequestQuery extends Params = Params>(
+    endpoint: string,
+    config?: Omit<WefyRequestConfig<EmptyRequestBody>, "body"> & {
+      params?: RequestQuery;
+    }
+  ): Promise<HTTPClientResponse<ResponseData>> {
+    return this.makeRequest<ResponseData, EmptyRequestBody, RequestQuery>(
+      "OPTIONS",
+      endpoint,
+      config
+    );
+  }
+
+  private async makeRequest<
+    ResponseData,
+    RequestBody extends HTTPRequestBody,
+    RequestQuery extends Params
   >(
     method: HttpMethod,
     endpoint: string,
-    config?: WefyRequestConfig<Body>
-  ): Promise<Response> {
+    config?: WefyRequestConfig<RequestBody> & { params?: RequestQuery }
+  ): Promise<HTTPClientResponse<ResponseData>> {
     const timeoutMs = config?.timeout ?? this.config.timeout;
     const controller = new AbortController();
     const timeoutId = setTimeout(
@@ -245,10 +227,6 @@ export class Wefy implements HttpClientVerbs {
       sanitizeOptions
     );
 
-    if (method === "GET" && this.cache.has(url.toString())) {
-      return this.cache.get(url.toString()) as Response;
-    }
-
     const headers = new Headers({
       ...this.config.options?.headers,
       ...config?.options?.headers,
@@ -256,42 +234,23 @@ export class Wefy implements HttpClientVerbs {
 
     let processedBody: BodyInit | undefined = undefined;
 
-    if (this.canHaveBody(method) && config?.body !== undefined) {
-      if (
-        typeof config.body === "object" &&
-        !(config.body instanceof Blob) &&
-        !(config.body instanceof FormData) &&
-        !(config.body instanceof URLSearchParams) &&
-        !(config.body instanceof ReadableStream) &&
-        !(typeof config.body === "string") &&
-        config.body !== null
-      ) {
-        processedBody = JSON.stringify(config.body);
-
-        if (!headers.has("Content-Type")) {
-          headers.set("Content-Type", "application/json");
-        }
-      } else {
-        processedBody = config.body as BodyInit;
-
-        if (!headers.has("Content-Type")) {
-          if (typeof processedBody === "string") {
-            try {
-              JSON.parse(processedBody);
-              headers.set("Content-Type", "application/json");
-            } catch {
-              headers.set("Content-Type", "text/plain");
-            }
-          }
-        }
-      }
+    if (this.methodCanContainBody(method)) {
+      processedBody = this.processRequestBody<RequestBody>(
+        headers,
+        config?.body
+      );
     }
+
+    const { signal, cleanup } = createSignal(
+      controller.signal,
+      config?.options?.signal
+    );
 
     try {
       const response = await fetch(url.toString(), {
         ...this.config.options,
         ...config?.options,
-        signal: createSignal(controller.signal, config?.options?.signal),
+        signal,
         credentials:
           config?.options?.credentials ??
           this.config.options?.credentials ??
@@ -302,65 +261,102 @@ export class Wefy implements HttpClientVerbs {
       });
 
       if (!response.ok) {
-        const res = response.clone();
-
-        const errorText = await this.parseError(res);
-        throw new WefyError(`Request failed: ${res.status} ${errorText}`, {
-          status: res.status,
-          response: res,
-          error: errorText,
-        });
+        throw await this.createErrorFromResponse(response);
       }
 
-      if (method === "GET") {
-        this.cache.set(url.toString(), response);
-      }
-
-      return await this.parseResponse<Response>(response, method);
+      return this.unwrapResponseData<ResponseData>(response, method);
     } catch (error) {
-      if (error instanceof WefyError) throw error;
-      throw new WefyError(
-        error instanceof Error ? error.message : "Unknown error occurred"
-      );
+      throw error instanceof WefyError
+        ? error
+        : new WefyError(
+            error instanceof Error ? error.message : "Unknown request error"
+          );
     } finally {
       clearTimeout(timeoutId);
+      cleanup();
     }
   }
 
-  private async parseResponse<T>(
-    response: globalThis.Response,
+  private processRequestBody<RequestBody extends HTTPRequestBody>(
+    headers: Headers,
+    body?: RequestBody
+  ): BodyInit | undefined {
+    if (body === null || body === undefined) {
+      return undefined;
+    }
+
+    if (
+      typeof body === "object" &&
+      !(body instanceof Blob) &&
+      !(body instanceof FormData) &&
+      !(body instanceof URLSearchParams) &&
+      !(body instanceof ReadableStream) &&
+      !(typeof body === "string")
+    ) {
+      if (!headers.has("Content-Type")) {
+        headers.set("Content-Type", "application/json");
+      }
+      return JSON.stringify(body);
+    }
+
+    if (typeof body === "string" && !headers.has("Content-Type")) {
+      try {
+        JSON.parse(body);
+        headers.set("Content-Type", "application/json");
+      } catch {
+        headers.set("Content-Type", "text/plain");
+      }
+    }
+
+    return body as BodyInit;
+  }
+
+  private async createErrorFromResponse(
+    response: Response
+  ): Promise<WefyError> {
+    const errorText = await this.parseErrorResponse(response);
+    return new WefyError(`HTTP Error: ${response.status} - ${errorText}`, {
+      status: response.status,
+      statusText: response.statusText,
+      response,
+    });
+  }
+
+  private async unwrapResponseData<ResponseData>(
+    response: Response,
     method: HttpMethod
-  ): Promise<T> {
-    if (method === "HEAD" || method === "OPTIONS") return undefined as T;
+  ): Promise<HTTPClientResponse<ResponseData>> {
+    if (method === "HEAD" || response.status === 204) {
+      return undefined as unknown as ResponseData;
+    }
 
     const contentType = response.headers.get("content-type");
 
     if (contentType?.includes("application/json")) {
-      return response.json() as Promise<T>;
-    } else if (contentType?.includes("text/")) {
-      const text = await response.text();
-      return text as unknown as T;
-    } else {
-      return response as unknown as T;
+      return response.json();
     }
+
+    if (contentType?.includes("text/")) {
+      return response.text() as Promise<ResponseData>;
+    }
+
+    return response.blob() as Promise<ResponseData>;
   }
 
-  private async parseError(response: globalThis.Response): Promise<string> {
+  private async parseErrorResponse(response: Response): Promise<string> {
     try {
       const contentType = response.headers.get("content-type");
       if (contentType?.includes("application/json")) {
-        const errorJson = await response.json();
-        return JSON.stringify(errorJson);
+        const errorData = await response.json();
+        return errorData.message || JSON.stringify(errorData);
       }
       return await response.text();
     } catch {
-      return response.statusText || response.status.toString();
+      return response.statusText;
     }
   }
 
-  private canHaveBody(method: HttpMethod): boolean {
+  private methodCanContainBody(method: HttpMethod): boolean {
     return ["POST", "PUT", "PATCH", "DELETE"].includes(method);
   }
-
-  private cache = new Map<string, Response>();
 }
