@@ -1,10 +1,48 @@
-import { Params } from "./types";
+import { Params, SanitizeUrlOptions } from "./types";
 
-export interface SanitizeUrlOptions {
-  encode?: boolean;
-  preserveEncoding?: boolean;
+/**
+ * Combines multiple AbortSignals into a single signal
+ */
+export function createSignal(...signals: (AbortSignal | null | undefined)[]): {
+  signal: AbortSignal;
+  cleanup: () => void;
+} {
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+
+  const cleanups: (() => void)[] = [];
+
+  for (const signal of signals) {
+    if (!signal) continue;
+    if (signal.aborted) {
+      controller.abort();
+      return { signal: controller.signal, cleanup: () => {} };
+    }
+    signal.addEventListener("abort", abort, { once: true });
+    cleanups.push(() => signal.removeEventListener("abort", abort));
+  }
+
+  return {
+    signal: controller.signal,
+    cleanup: () => cleanups.forEach((fn) => fn()),
+  };
 }
 
+/**
+ * Ensures fetch is available in the global context
+ */
+export function resolveFetch(): typeof fetch {
+  if (typeof globalThis.fetch === "function") {
+    return globalThis.fetch;
+  }
+  throw new Error(
+    `[Wefy] No global fetch available. Node version ${process.versions.node}. Please use Node.js 18+ or provide a custom fetch implementation.`
+  );
+}
+
+/**
+ * Sanitizes a URL by combining base URL, endpoint, and query parameters
+ */
 export function sanitizeUrl(
   baseUrl: string,
   endpoint: string = "",
@@ -20,16 +58,15 @@ export function sanitizeUrl(
 
   try {
     const base = new URL(baseUrl);
-
     if (typeof endpoint !== "string") {
       endpoint = "";
     }
 
     const [rawPath, ...queryParts] = endpoint.split("?");
     const endpointQuery = queryParts.join("?");
+
     const basePath = base.pathname;
     let fullPath = basePath;
-
     if (rawPath) {
       if (fullPath.endsWith("/") && rawPath.startsWith("/")) {
         fullPath += rawPath.slice(1);
@@ -61,8 +98,8 @@ export function sanitizeUrl(
     if (params && typeof params === "object") {
       Object.entries(params).forEach(([key, value]) => {
         if (!key) return;
-
         const processedKey = options.encode ? encodeURIComponent(key) : key;
+
         resolvedUrl.searchParams.delete(processedKey);
 
         if (value === undefined || value === null) return;
@@ -90,35 +127,4 @@ export function sanitizeUrl(
       }`
     );
   }
-}
-
-export function createSignal(
-  ...signals: (AbortSignal | null | undefined)[]
-): AbortSignal {
-  const controller = new AbortController();
-
-  const abort = () => controller.abort();
-
-  for (const signal of signals) {
-    if (!signal) continue;
-
-    if (signal.aborted) {
-      controller.abort();
-      return controller.signal;
-    }
-
-    signal.addEventListener("abort", abort, { once: true });
-  }
-
-  return controller.signal;
-}
-
-export function resolveFetch(): typeof fetch {
-  if (typeof globalThis.fetch === "function") {
-    return globalThis.fetch;
-  }
-
-  throw new Error(
-    "[Wefy] No global fetch available. Please use Node.js 18+ or provide a custom fetch implementation."
-  );
 }
