@@ -1,3 +1,4 @@
+import { WefyExtensionManager } from "@/extension/manager";
 import { WefyError } from "./error";
 import {
   HttpMethod,
@@ -75,11 +76,20 @@ interface HTTPClientInterface {
 }
 
 export class Wefy implements HTTPClientInterface {
+  private readonly extensionManager?: WefyExtensionManager;
+
   private constructor(private readonly config: WefyConfig) {
     this.validateConfig(config);
     this.config.timeout = config.timeout ?? 5000;
     this.config.encode = config.encode ?? true;
     this.config.preserveEncoding = config.preserveEncoding ?? false;
+
+    if (config.extensions?.use) {
+      this.extensionManager = new WefyExtensionManager(config.extensions.use);
+      this.extensionManager
+        .initialize(config.extensions.config || {})
+        .catch(console.error);
+    }
   }
 
   static create(config: WefyConfig): Wefy;
@@ -227,34 +237,117 @@ export class Wefy implements HTTPClientInterface {
       config?.options?.signal
     );
 
-    const responsePromise = fetch(url.toString(), {
-      ...this.config.options,
-      ...config?.options,
-      signal,
-      credentials:
-        config?.options?.credentials ??
-        this.config.options?.credentials ??
-        "same-origin",
+    const startTime = Date.now();
+    let success = false;
+
+    const requestDetails = {
+      url: url.toString(),
       method,
-      headers,
+      headers: Object.fromEntries(headers.entries()),
       body: processedBody,
-    }).then(async (res) => {
-      const clone = res.clone();
-      if (!res.ok) throw await this.createErrorFromResponse(clone);
-      return clone;
-    });
+    };
+
+    const responsePromise = (async () => {
+      try {
+        if (this.extensionManager) {
+          await this.extensionManager.executeHook("beforeRequest", {
+            method,
+            endpoint,
+            config: config || {},
+          });
+        }
+
+        if (this.extensionManager) {
+          await this.extensionManager.executeHook("onRequest", requestDetails);
+        }
+
+        const response = await fetch(url.toString(), {
+          ...this.config.options,
+          ...config?.options,
+          signal,
+          credentials:
+            config?.options?.credentials ??
+            this.config.options?.credentials ??
+            "same-origin",
+          method,
+          headers,
+          body: processedBody,
+        });
+
+        if (this.extensionManager) {
+          await this.extensionManager.executeHook("beforeResponse", {
+            response,
+            duration: Date.now() - startTime,
+          });
+        }
+
+        const clone = response.clone();
+        if (!response.ok) throw await this.createErrorFromResponse(clone);
+        return clone;
+      } catch (error) {
+        throw error;
+      }
+    })();
 
     const dataPromise = (async (): Promise<ResponseData> => {
       try {
         const response = await responsePromise;
-        return this.unwrapResponseData<ResponseData>(response, method);
+        const duration = Date.now() - startTime;
+
+        const data = await this.unwrapResponseData<ResponseData>(
+          response,
+          method
+        );
+
+        if (this.extensionManager) {
+          await this.extensionManager.executeHook("onResponse", {
+            response,
+            data,
+          });
+        }
+
+        if (this.extensionManager) {
+          await this.extensionManager.executeHook("afterSuccess", {
+            response,
+            data,
+            duration,
+          });
+        }
+
+        success = true;
+        return data;
       } catch (error) {
+        const errorContext = {
+          method,
+          endpoint,
+          config,
+          url: url.toString(),
+          duration: Date.now() - startTime,
+        };
+
+        if (this.extensionManager) {
+          await this.extensionManager.executeHook(
+            "onError",
+            error,
+            errorContext
+          );
+        }
+
         throw error instanceof WefyError
           ? error
           : new WefyError(
               error instanceof Error ? error.message : "Unknown request error"
             );
       } finally {
+        if (this.extensionManager) {
+          await this.extensionManager.executeHook("afterRequest", {
+            method,
+            endpoint,
+            config,
+            duration: Date.now() - startTime,
+            success,
+          });
+        }
         clearTimeout(timeoutId);
         cleanup();
       }

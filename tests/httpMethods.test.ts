@@ -109,10 +109,15 @@ describe("HTTP Methods", () => {
 
       abortController.abort();
 
-      await expect(promise).rejects.toThrow();
+      await expect(promise).rejects.toThrow(DOMException);
+      await expect(promise).rejects.toThrow("The user aborted a request");
+
+      expect(fetch).toHaveBeenCalledTimes(1);
       expect(fetch).toHaveBeenCalledWith(
         expect.any(String),
-        expect.objectContaining({ signal: abortController.signal })
+        expect.objectContaining({
+          signal: abortController.signal,
+        })
       );
     });
   });
