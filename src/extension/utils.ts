@@ -1,9 +1,4 @@
-import {
-  ExtensionError,
-  SharedStateValue,
-  WefyExtension,
-  WefyExtensionContext,
-} from "./types";
+import { ExtensionError, WefyExtension } from "./types";
 
 export function createExtension<ExtensionState extends Record<string, unknown>>(
   extension: WefyExtension<ExtensionState>
