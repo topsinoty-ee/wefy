@@ -7,6 +7,10 @@ settings:
 importers:
 
   .:
+    dependencies:
+      immer:
+        specifier: ^10.1.1
+        version: 10.1.1
     devDependencies:
       '@types/node':
         specifier: ^22.15.3
@@ -722,6 +726,9 @@ packages:
   iconv-lite@0.6.3:
     resolution: {integrity: sha512-4fCk79wshMdzMp2rH06qWrJE4iolqLhCUH+OiuIgU++RB0+94NlDL81atO7GX55uUKueo0txHNtvEyI6D7WdMw==}
     engines: {node: '>=0.10.0'}
+
+  immer@10.1.1:
+    resolution: {integrity: sha512-s2MPrmjovJcoMaHtx6K11Ra7oD05NT97w1IC5zpMkT6Atjr7H8LjaDd81iIxUYpMKSRRNMJE703M1Fhr/TctHw==}
 
   import-lazy@4.0.0:
     resolution: {integrity: sha512-rKtvo6a868b5Hu3heneU+L4yEQ4jYKLtjpnPeUdK7h0yzXGmyBTypknlkCvHFBqfX9YlorEiMM6Dnq/5atfHkw==}
@@ -1845,6 +1852,8 @@ snapshots:
     dependencies:
       safer-buffer: 2.1.2
     optional: true
+
+  immer@10.1.1: {}
 
   import-lazy@4.0.0: {}
 
