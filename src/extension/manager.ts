@@ -84,8 +84,7 @@ export class WefyExtensionManager {
     extensionName: string,
     initialState: ExtensionState
   ): WefyExtensionContext<ExtensionState> {
-    // Use immer to create immutable initial state
-    let state = produce(initialState, () => {}) as ExtensionState;
+    let state: ExtensionState = Object.freeze(produce(initialState, () => {}));
 
     // Create a setState function for this context
     const setState = (modifier: StateModifier<ExtensionState>): void => {
@@ -121,7 +120,6 @@ export class WefyExtensionManager {
       }
     };
 
-    // Create the context object
     return {
       get extensionState(): Immutable<ExtensionState> {
         return state as Immutable<ExtensionState>;

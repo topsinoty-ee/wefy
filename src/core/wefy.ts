@@ -254,6 +254,7 @@ export class Wefy implements HTTPClientInterface {
             method,
             endpoint,
             config: config || {},
+            request: requestDetails,
           });
         }
 
