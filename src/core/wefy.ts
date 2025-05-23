@@ -2,6 +2,7 @@ import {HttpMethod, SanitizeUrlOptions, WefyConfig, WefyRequestConfig} from "@/c
 import {createSignal, resolveFetch, sanitizeUrl} from "@/core/utils.ts";
 import {WefyParseError, WefyTimeoutError} from "@/core/error.ts";
 import {WefyResponse} from "@/core/response.ts";
+import {produce} from "immer";
 
 type BaseWefy = Omit<Wefy, 'decorate' | 'raw'> & {
   raw: Omit<WefyRaw, 'makeRequest'>;
@@ -114,20 +115,18 @@ class Wefy extends HttpMethodsBase {
     }
   }
   
-  public decorate<Name extends string, Config extends Partial<WefyConfig>>(name: Name, config: Config): Wefy & { [K in Name]: DecoratedWefy } {
-    
-    Object.defineProperty(this, name, {
-      value: new Wefy({
-        ...this.config, ...config, options: {
-          ...this.config.options, ...config.options, headers: new Headers({
-            ...this.config.options?.headers, ...config.options?.headers
-          })
-        }
-      }), writable: false, enumerable: true, configurable: false
-    });
-    
-    
-    return this as Wefy & { [K in Name]: DecoratedWefy };
+  public decorate<Name extends string, Config extends Partial<WefyConfig>>(name: Name, config: Config): this & { [K in Name]: DecoratedWefy } {
+    return produce(this, (draft) => {
+      Object.defineProperty(draft, name, {
+        value: new Wefy({
+          ...this.config, ...config, options: {
+            ...this.config.options, ...config.options, headers: new Headers({
+              ...this.config.options?.headers, ...config.options?.headers,
+            }),
+          },
+        }), writable: false, enumerable: true, configurable: false,
+      });
+    }) as this & { [K in Name]: DecoratedWefy };
   }
   
   protected async makeRequest<ResponseData, RequestData extends RequestInit['body'] = undefined>(method: HttpMethod, path: string, body?: RequestData, config?: WefyRequestConfig): Promise<ResponseData> {
@@ -143,3 +142,8 @@ class Wefy extends HttpMethodsBase {
 }
 
 export {Wefy};
+
+const api = Wefy.create("").decorate("test", {})
+console.log(await api.test.get<string>("dfd"));
+
+
