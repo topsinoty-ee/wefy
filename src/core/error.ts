@@ -12,7 +12,7 @@ export class WefyError extends Error {
   public status?: number;
   public statusText?: string;
   public cause?: unknown;
-
+  
   constructor(
     message: string,
     public readonly options?: Partial<WefyErrorOptions>
@@ -24,7 +24,7 @@ export class WefyError extends Error {
     this.statusText = options?.statusText;
     this.response = options?.response;
     this.error = options?.error;
-
+    
     Object.setPrototypeOf(this, new.target.prototype);
   }
 }
