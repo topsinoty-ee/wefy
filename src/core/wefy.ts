@@ -1,30 +1,30 @@
 import {HttpMethod, SanitizeUrlOptions, WefyConfig, WefyRequestConfig} from "@/core/types.ts";
-import {createSignal, mergeHeaders, resolveFetch, sanitizeUrl} from "@/core/utils.ts";
+import {createSignal, resolveFetch, sanitizeUrl} from "@/core/utils.ts";
 import {WefyParseError, WefyTimeoutError} from "@/core/error.ts";
 import {WefyResponse} from "@/core/response.ts";
 
-abstract class HttpMethodsBase {
-  get<ResponseData = unknown>(path: string, config?: WefyRequestConfig): Promise<ResponseData> {
+abstract class HttpMethodsBase<ReturnType = unknown> {
+  get<ResponseData = ReturnType>(path: string, config?: WefyRequestConfig): Promise<ResponseData> {
     return this.makeRequest<ResponseData>('GET', path, undefined, config);
   }
   
-  post<ResponseData = unknown, RequestData extends RequestInit['body'] = null>(path: string, body?: RequestData, config?: WefyRequestConfig): Promise<ResponseData> {
+  post<ResponseData = ReturnType, RequestData extends RequestInit['body' ] = undefined>(path: string, body?: RequestData, config?: WefyRequestConfig): Promise<ResponseData> {
     return this.makeRequest<ResponseData, RequestData>('POST', path, body, config);
   }
   
-  put<ResponseData = unknown, RequestData extends RequestInit['body'] = null>(path: string, body?: RequestData, config?: WefyRequestConfig): Promise<ResponseData> {
+  put<ResponseData = ReturnType, RequestData extends RequestInit['body' ] = undefined>(path: string, body?: RequestData, config?: WefyRequestConfig): Promise<ResponseData> {
     return this.makeRequest<ResponseData, RequestData>('PUT', path, body, config);
   }
   
-  patch<ResponseData = unknown, RequestData extends RequestInit['body'] = null>(path: string, body?: RequestData, config?: WefyRequestConfig): Promise<ResponseData> {
+  patch<ResponseData = ReturnType, RequestData extends RequestInit['body' ] = undefined>(path: string, body?: RequestData, config?: WefyRequestConfig): Promise<ResponseData> {
     return this.makeRequest<ResponseData, RequestData>('PATCH', path, body, config);
   }
   
-  delete<ResponseData = unknown>(path: string, config?: WefyRequestConfig): Promise<ResponseData> {
+  delete<ResponseData = ReturnType>(path: string, config?: WefyRequestConfig): Promise<ResponseData> {
     return this.makeRequest<ResponseData>('DELETE', path, undefined, config);
   }
   
-  protected abstract makeRequest<ResponseData, RequestData extends RequestInit['body'] = undefined>(method: HttpMethod, path: string, body?: RequestData, config?: WefyRequestConfig): Promise<ResponseData>;
+  protected abstract makeRequest<ResponseData = ReturnType, RequestData extends RequestInit['body'] = undefined>(method: HttpMethod, path: string, body?: RequestData, config?: WefyRequestConfig): Promise<ResponseData>;
 }
 
 class WefyRaw extends HttpMethodsBase {
@@ -32,8 +32,9 @@ class WefyRaw extends HttpMethodsBase {
     super();
   }
   
-  protected async makeRequest<ResponseData = Response, RequestData extends RequestInit['body'] = undefined>(method: HttpMethod, path: string, body?: RequestData, config?: WefyRequestConfig): Promise<ResponseData> {
-    return await this.wefy.request<ResponseData, RequestData>(method, path, body, config, true) as Promise<ResponseData>;
+  protected async makeRequest<ResponseData, RequestData extends RequestInit['body']>(method: HttpMethod, path: string, body?: RequestData, config?: WefyRequestConfig): Promise<ResponseData> {
+    const response = await this.wefy.request<ResponseData, RequestData>(method, path, body, config, true);
+    return response as ResponseData;
   }
 }
 
@@ -72,8 +73,6 @@ class Wefy extends HttpMethodsBase {
       const isAbsoluteUrl = path.startsWith("https://") || path.startsWith("http://");
       const url = sanitizeUrl(isAbsoluteUrl ? path : this.config.baseUrl, isAbsoluteUrl ? "" : path, params, sanitizeOptions);
       
-      const headers = mergeHeaders(this.config.options?.headers ?? {}, config?.options?.headers ?? {});
-      
       const baseOptions = {...this.config.options};
       const requestOptions = {...config?.options};
       delete baseOptions?.headers;
@@ -82,7 +81,10 @@ class Wefy extends HttpMethodsBase {
       const fetchOptions: RequestInit = {
         ...baseOptions, ...requestOptions,
         method,
-        headers,
+        headers: new Headers({
+          ...this.config.options?.headers,
+          ...config?.options?.headers
+        }),
         body,
         signal: createSignal(controller.signal, config?.options?.signal, this.config.options?.signal).signal
       };
@@ -111,6 +113,20 @@ class Wefy extends HttpMethodsBase {
     }
   }
   
+  public decorate<Name extends string, Config extends Partial<WefyConfig>>(
+    name: Name,
+    config: Config
+  ): Wefy & { [K in Name]: Wefy } {
+    Object.defineProperty(this, name, {
+      value: new Wefy(this.mergeConfig(config)),
+      writable: false,
+      enumerable: true,
+      configurable: false,
+    });
+    return this as Wefy & { [K in Name]: Wefy };
+  }
+  
+  
   protected async makeRequest<ResponseData, RequestData extends RequestInit['body'] = undefined>(method: HttpMethod, path: string, body?: RequestData, config?: WefyRequestConfig): Promise<ResponseData> {
     const response = await this.request<ResponseData, RequestData>(method, path, body, config);
     return (response instanceof WefyResponse ? await response.auto() : response);
@@ -124,5 +140,3 @@ class Wefy extends HttpMethodsBase {
 }
 
 export {Wefy};
-
-
