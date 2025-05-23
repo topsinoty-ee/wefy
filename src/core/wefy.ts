@@ -3,6 +3,12 @@ import {createSignal, resolveFetch, sanitizeUrl} from "@/core/utils.ts";
 import {WefyParseError, WefyTimeoutError} from "@/core/error.ts";
 import {WefyResponse} from "@/core/response.ts";
 
+type BaseWefy = Omit<Wefy, 'decorate' | 'raw'> & {
+  raw: Omit<WefyRaw, 'makeRequest'>;
+};
+
+type DecoratedWefy = BaseWefy;
+
 abstract class HttpMethodsBase<ReturnType = unknown> {
   get<ResponseData = ReturnType>(path: string, config?: WefyRequestConfig): Promise<ResponseData> {
     return this.makeRequest<ResponseData>('GET', path, undefined, config);
@@ -79,14 +85,9 @@ class Wefy extends HttpMethodsBase {
       delete requestOptions?.headers;
       
       const fetchOptions: RequestInit = {
-        ...baseOptions, ...requestOptions,
-        method,
-        headers: new Headers({
-          ...this.config.options?.headers,
-          ...config?.options?.headers
-        }),
-        body,
-        signal: createSignal(controller.signal, config?.options?.signal, this.config.options?.signal).signal
+        ...baseOptions, ...requestOptions, method, headers: new Headers({
+          ...this.config.options?.headers, ...config?.options?.headers
+        }), body, signal: createSignal(controller.signal, config?.options?.signal, this.config.options?.signal).signal
       };
       
       const resPromise = this.fetch(url, fetchOptions).catch(error => {
@@ -113,19 +114,21 @@ class Wefy extends HttpMethodsBase {
     }
   }
   
-  public decorate<Name extends string, Config extends Partial<WefyConfig>>(
-    name: Name,
-    config: Config
-  ): Wefy & { [K in Name]: Wefy } {
+  public decorate<Name extends string, Config extends Partial<WefyConfig>>(name: Name, config: Config): Wefy & { [K in Name]: DecoratedWefy } {
+    
     Object.defineProperty(this, name, {
-      value: new Wefy(this.mergeConfig(config)),
-      writable: false,
-      enumerable: true,
-      configurable: false,
+      value: new Wefy({
+        ...this.config, ...config, options: {
+          ...this.config.options, ...config.options, headers: new Headers({
+            ...this.config.options?.headers, ...config.options?.headers
+          })
+        }
+      }), writable: false, enumerable: true, configurable: false
     });
-    return this as Wefy & { [K in Name]: Wefy };
+    
+    
+    return this as Wefy & { [K in Name]: DecoratedWefy };
   }
-  
   
   protected async makeRequest<ResponseData, RequestData extends RequestInit['body'] = undefined>(method: HttpMethod, path: string, body?: RequestData, config?: WefyRequestConfig): Promise<ResponseData> {
     const response = await this.request<ResponseData, RequestData>(method, path, body, config);
