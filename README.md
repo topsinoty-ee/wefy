@@ -1,3 +1,5 @@
+Not currently maintained
+---
 # Wefy—Modern HTTP Client with Extensible Architecture
 
 [![npm version](https://img.shields.io/npm/v/wefy)](https://www.npmjs.com/package/wefy)
